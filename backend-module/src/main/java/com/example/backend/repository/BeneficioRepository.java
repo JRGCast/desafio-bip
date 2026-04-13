@@ -24,7 +24,7 @@ public interface BeneficioRepository extends JpaRepository<Beneficio, Long> {
      * idempotente e de baixo risco concorrente, portanto o tradeoff é aceitável.
      * Retorna o número de linhas afetadas (0 = ID não encontrado, 1 = sucesso).
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE Beneficio b SET b.ativo = :ativo WHERE b.id = :id")
     int updateAtivo(@Param("id") Long id, @Param("ativo") Boolean ativo);
 }
