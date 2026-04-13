@@ -1,5 +1,5 @@
 import { Component, inject, computed, signal, DestroyRef } from '@angular/core';
-import { DecimalPipe, CurrencyPipe } from '@angular/common';
+import { CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, forkJoin, catchError, retry, EMPTY, timer } from 'rxjs';
@@ -15,7 +15,7 @@ import { BeneficioStateService } from '../../services/beneficio-state.service';
 @Component({
   selector: 'app-beneficio-slider',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, CurrencyPipe],
+  imports: [FormsModule, CurrencyPipe],
   templateUrl: './beneficio-slider.component.html',
   styleUrl: './beneficio-slider.component.css'
 })
