@@ -1,64 +1,74 @@
-import { Component, inject, computed, signal, OnInit, DestroyRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, computed, signal, DestroyRef } from '@angular/core';
+import { DecimalPipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { switchMap, forkJoin, catchError, retry, EMPTY } from 'rxjs';
+import { switchMap, forkJoin, catchError, retry, EMPTY, timer } from 'rxjs';
 import { ApiService, IBeneficio, ITransferenciaRequest } from '../../services/api.service';
 import { BeneficioStateService } from '../../services/beneficio-state.service';
 
+/**
+ * Componente de redistribuição de valores entre dois benefícios via slider.
+ *
+ * Reage ao estado global (Signals) e executa transferências via API.
+ * Após cada operação bem-sucedida, recarrega o estado global.
+ */
 @Component({
   selector: 'app-beneficio-slider',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule, DecimalPipe, CurrencyPipe],
   templateUrl: './beneficio-slider.component.html',
   styleUrl: './beneficio-slider.component.css'
 })
-export class BeneficioSliderComponent implements OnInit {
+export class BeneficioSliderComponent {
   private apiService = inject(ApiService);
   private state = inject(BeneficioStateService);
   private destroyRef = inject(DestroyRef);
 
-  // Simple signals - managed via subscription
+  // Benefícios atuais sincronizados com o estado global
   beneficioA = signal<IBeneficio | null>(null);
   beneficioB = signal<IBeneficio | null>(null);
 
-  // Total computed from local signals
-  total = computed(() => 
+  /** Soma dos valores dos dois benefícios — base para redistribuição. */
+  total = computed(() =>
     Number(this.beneficioA()?.valor || 0) + Number(this.beneficioB()?.valor || 0)
   );
 
-  // User input
+  /** Percentual do slider controlado pelo usuário (0–100). */
   sliderPercentage = signal(50);
 
-  // Display values computed from total + user input
+  /** Valor calculado do benefício A de acordo com a posição do slider. */
   valorA = computed(() => Math.round(this.total() * (this.sliderPercentage() / 100)));
+
+  /** Valor calculado do benefício B (complemento ao total). */
   valorB = computed(() => this.total() - this.valorA());
 
-  // Only true during API calls
+  /** Indica se há uma operação de API em andamento. */
   loading = signal(false);
-  // Shows loading state before state is loaded
+
+  /** Torna-se `true` após o estado inicial ser carregado do serviço global. */
   componentReady = signal(false);
+
+  /** Mensagem de erro da última operação falha. Vazia quando não há erro. */
   error = signal('');
-  refreshFailed = signal(false);
+
+  /** Mensagem de sucesso temporária. Limpa automaticamente após 3 segundos. */
   successMessage = signal('');
 
   constructor() {
-    toObservable(this.state.beneficios as any).pipe(
+    // Reage a mudanças no estado global de benefícios
+    toObservable(this.state.beneficios).pipe(
       takeUntilDestroyed(this.destroyRef)
-    ).subscribe((beneficios: any) => {
+    ).subscribe((beneficios: IBeneficio[]) => {
       if (beneficios && beneficios.length > 0) {
-        this.beneficioA.set(beneficios[0] || null);
-        this.beneficioB.set(beneficios[1] || null);
+        this.beneficioA.set(beneficios[0] ?? null);
+        this.beneficioB.set(beneficios[1] ?? null);
         this.syncSliderWithState();
         this.componentReady.set(true);
       }
     });
   }
 
-  ngOnInit(): void {
-    // Initialization handled in constructor
-  }
-
+  /** Sincroniza o percentual do slider com os valores atuais dos benefícios. */
   private syncSliderWithState(): void {
     const a = this.beneficioA();
     const t = this.total();
@@ -67,6 +77,11 @@ export class BeneficioSliderComponent implements OnInit {
     }
   }
 
+  /**
+   * Monta o request de transferência com base na diferença entre
+   * o valor atual e o valor calculado pelo slider.
+   * Retorna `null` se não há diferença (nenhuma ação necessária).
+   */
   private buildTransferenciaRequest(): ITransferenciaRequest | null {
     const a = this.beneficioA();
     const b = this.beneficioB();
@@ -74,39 +89,48 @@ export class BeneficioSliderComponent implements OnInit {
 
     const currentA = Number(a.valor);
     const newA = this.valorA();
-    const diff = Math.abs(newA - currentA);
 
-    if (diff === 0) return null;
+    if (newA === currentA) return null;
 
-    if (newA < currentA) {
-      return { fromId: a.id, toId: b.id, amount: currentA - newA };
-    } else {
-      return { fromId: b.id, toId: a.id, amount: newA - currentA };
-    }
+    return newA < currentA
+      ? { fromId: a.id, toId: b.id, amount: currentA - newA }
+      : { fromId: b.id, toId: a.id, amount: newA - currentA };
   }
 
-  onSliderChange(updatedValue: number): void {
-    this.sliderPercentage.set(updatedValue);
+  /** Recarrega benefícios e transações no estado global via API. */
+  private reloadState() {
+    return forkJoin({
+      beneficios: this.apiService.getBeneficios().pipe(retry({ count: 3, delay: 1000 })),
+      transacoes: this.apiService.getTransacoes().pipe(retry({ count: 3, delay: 1000 }))
+    });
   }
 
+  /** Exibe uma mensagem temporária de sucesso por 3 segundos. */
+  private showSuccess(message: string): void {
+    this.successMessage.set(message);
+    timer(3000).pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => this.successMessage.set(''));
+  }
+
+  onSliderChange(value: number): void {
+    this.sliderPercentage.set(value);
+  }
+
+  /**
+   * Executa a transferência calculada pelo slider.
+   * Recarrega o estado global após sucesso.
+   */
   alterar(): void {
     const request = this.buildTransferenciaRequest();
     if (!request) return;
 
-    this.refreshFailed.set(false);
     this.loading.set(true);
     this.error.set('');
     this.successMessage.set('');
 
     this.apiService.transferir(request).pipe(
-      switchMap(() => forkJoin({
-        beneficios: this.apiService.getBeneficios().pipe(
-          retry({ count: 3, delay: 1000 })
-        ),
-        transacoes: this.apiService.getTransacoes().pipe(
-          retry({ count: 3, delay: 1000 })
-        )
-      })),
+      switchMap(() => this.reloadState()),
       catchError(err => {
         this.loading.set(false);
         this.error.set('Erro ao realizar transferência. Tente novamente.');
@@ -116,46 +140,32 @@ export class BeneficioSliderComponent implements OnInit {
     ).subscribe({
       next: ({ beneficios, transacoes }) => {
         this.loading.set(false);
-        this.refreshFailed.set(false);
         this.state.setBeneficios(beneficios);
         this.state.setTransacoes(transacoes);
-        
-        this.successMessage.set('Transferência realizada com sucesso!');
-        setTimeout(() => this.successMessage.set(''), 3000);
-      },
-      error: () => {
-        this.refreshFailed.set(true);
-        this.loading.set(false);
+        this.showSuccess('Transferência realizada com sucesso!');
       }
     });
   }
 
+  /**
+   * Força o recarregamento dos dados do backend.
+   * Útil após falha ou para verificar atualizações.
+   */
   refreshData(): void {
-    this.refreshFailed.set(false);
     this.loading.set(true);
     this.error.set('');
     this.successMessage.set('');
 
-    forkJoin({
-      beneficios: this.apiService.getBeneficios().pipe(
-        retry({ count: 3, delay: 1000 })
-      ),
-      transacoes: this.apiService.getTransacoes().pipe(
-        retry({ count: 3, delay: 1000 })
-      )
-    }).subscribe({
+    this.reloadState().subscribe({
       next: ({ beneficios, transacoes }) => {
         this.loading.set(false);
-        this.refreshFailed.set(false);
         this.state.setBeneficios(beneficios);
         this.state.setTransacoes(transacoes);
-        
-        this.successMessage.set('Dados atualizados com sucesso!');
-        setTimeout(() => this.successMessage.set(''), 3000);
+        this.showSuccess('Dados atualizados com sucesso!');
       },
       error: () => {
-        this.refreshFailed.set(true);
         this.loading.set(false);
+        this.error.set('Erro ao atualizar dados. Tente novamente.');
       }
     });
   }
