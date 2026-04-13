@@ -12,6 +12,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_versioned_data: true
+        order_updates: true
+        order_inserts: true
   sql:
     init:
       mode: always

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -63,8 +64,8 @@ class BeneficioServiceTest {
 
         var result = beneficioService.criar(req);
 
-        assertThat(result.getId()).isEqualTo(3L);
-        assertThat(result.getNome()).isEqualTo("Novo");
+        assertThat(result.id()).isEqualTo(3L);
+        assertThat(result.nome()).isEqualTo("Novo");
     }
 
     @Test
@@ -79,6 +80,25 @@ class BeneficioServiceTest {
         verify(beneficioRepository).save(beneficioA);
     }
 
+    @Test
+    @DisplayName("alterarStatus — UPDATE direto via @Query, retorna void")
+    void alterarStatus_sucesso() {
+        when(beneficioRepository.updateAtivo(1L, false)).thenReturn(1);
+
+        beneficioService.alterarStatus(1L, false);
+
+        verify(beneficioRepository).updateAtivo(1L, false);
+    }
+
+    @Test
+    @DisplayName("alterarStatus — lança exceção se ID não encontrado")
+    void alterarStatus_naoEncontrado() {
+        when(beneficioRepository.updateAtivo(99L, false)).thenReturn(0);
+
+        assertThatThrownBy(() -> beneficioService.alterarStatus(99L, false))
+                .isInstanceOf(BeneficioNotFoundException.class);
+    }
+
     // ─── TRANSFERÊNCIA ───────────────────────────────────────
 
     @Test
@@ -86,7 +106,7 @@ class BeneficioServiceTest {
     void transferir_sucesso() {
         when(beneficioRepository.findById(1L)).thenReturn(Optional.of(beneficioA));
         when(beneficioRepository.findById(2L)).thenReturn(Optional.of(beneficioB));
-        when(beneficioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(beneficioRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         when(transacaoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         TransferenciaRequestDTO req = new TransferenciaRequestDTO(1L, 2L, new BigDecimal("300.00"));
@@ -94,8 +114,22 @@ class BeneficioServiceTest {
 
         assertThat(beneficioA.getValor()).isEqualByComparingTo("700.00");
         assertThat(beneficioB.getValor()).isEqualByComparingTo("800.00");
-        assertThat(result.getAmount()).isEqualByComparingTo("300.00");
-        assertThat(result.getFromValorAnterior()).isEqualByComparingTo("1000.00");
+        assertThat(result.amount()).isEqualByComparingTo("300.00");
+        assertThat(result.fromValorAnterior()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    @DisplayName("transferir — usa saveAll (batch) para optimistic locking")
+    void transferir_saveAllChamado() {
+        when(beneficioRepository.findById(1L)).thenReturn(Optional.of(beneficioA));
+        when(beneficioRepository.findById(2L)).thenReturn(Optional.of(beneficioB));
+        when(beneficioRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        when(transacaoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        TransferenciaRequestDTO req = new TransferenciaRequestDTO(1L, 2L, new BigDecimal("300.00"));
+        beneficioService.transferir(req);
+
+        verify(beneficioRepository).saveAll(anyList());
     }
 
     @Test
@@ -135,5 +169,21 @@ class BeneficioServiceTest {
         TransferenciaRequestDTO req = new TransferenciaRequestDTO(99L, 2L, new BigDecimal("100.00"));
         assertThatThrownBy(() -> beneficioService.transferir(req))
                 .isInstanceOf(BeneficioNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("transferir — OptimisticLockingFailureException quando versão stale")
+    void transferencia_versaoStale() {
+        beneficioA.setVersion(5L);
+        beneficioB.setVersion(5L);
+
+        when(beneficioRepository.findById(1L)).thenReturn(Optional.of(beneficioA));
+        when(beneficioRepository.findById(2L)).thenReturn(Optional.of(beneficioB));
+        when(beneficioRepository.saveAll(anyList()))
+                .thenThrow(new ObjectOptimisticLockingFailureException("Stale version", new RuntimeException()));
+
+        TransferenciaRequestDTO req = new TransferenciaRequestDTO(1L, 2L, new BigDecimal("100.00"));
+        assertThatThrownBy(() -> beneficioService.transferir(req))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
 }
