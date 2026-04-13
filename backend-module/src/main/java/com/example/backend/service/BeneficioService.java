@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -45,9 +46,9 @@ public class BeneficioService {
     @Transactional
     public BeneficioResponseDTO criar(BeneficioRequestDTO dto) {
         Beneficio novo = Beneficio.builder()
-                .nome(dto.getNome())
-                .descricao(dto.getDescricao())
-                .valor(dto.getValor())
+                .nome(dto.nome())
+                .descricao(dto.descricao())
+                .valor(dto.valor())
                 .ativo(true)
                 .build();
         return BeneficioResponseDTO.from(beneficioRepository.save(novo));
@@ -57,9 +58,9 @@ public class BeneficioService {
     public BeneficioResponseDTO atualizar(Long id, BeneficioRequestDTO dto) {
         Beneficio b = beneficioRepository.findByIdAndAtivoTrue(id)
                 .orElseThrow(() -> new BeneficioNotFoundException(id));
-        b.setNome(dto.getNome());
-        b.setDescricao(dto.getDescricao());
-        b.setValor(dto.getValor());
+        b.setNome(dto.nome());
+        b.setDescricao(dto.descricao());
+        b.setValor(dto.valor());
         return BeneficioResponseDTO.from(beneficioRepository.save(b));
     }
 
@@ -107,22 +108,22 @@ public class BeneficioService {
     @Transactional
     public TransacaoResponseDTO transferir(TransferenciaRequestDTO dto) {
         // 1. Validações de entrada
-        if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        if (dto.amount() == null || dto.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("O valor da transferência deve ser positivo");
         }
-        if (dto.getFromId().equals(dto.getToId())) {
+        if (dto.fromId().equals(dto.toId())) {
             throw new IllegalArgumentException("Benefício de origem e destino devem ser diferentes");
         }
 
         // 2. Busca — @Version ativo na entidade; sem lock explícito
-        Beneficio from = beneficioRepository.findById(dto.getFromId())
-                .orElseThrow(() -> new BeneficioNotFoundException(dto.getFromId()));
-        Beneficio to = beneficioRepository.findById(dto.getToId())
-                .orElseThrow(() -> new BeneficioNotFoundException(dto.getToId()));
+        Beneficio from = beneficioRepository.findById(dto.fromId())
+                .orElseThrow(() -> new BeneficioNotFoundException(dto.fromId()));
+        Beneficio to = beneficioRepository.findById(dto.toId())
+                .orElseThrow(() -> new BeneficioNotFoundException(dto.toId()));
 
         // 3. Validação de saldo
-        if (from.getValor().compareTo(dto.getAmount()) < 0) {
-            throw new SaldoInsuficienteException(from.getId(), from.getValor(), dto.getAmount());
+        if (from.getValor().compareTo(dto.amount()) < 0) {
+            throw new SaldoInsuficienteException(from.getId(), from.getValor(), dto.amount());
         }
 
         // 4. Snapshots para o recibo
@@ -130,20 +131,19 @@ public class BeneficioService {
         BigDecimal toAnterior   = to.getValor();
 
         // 5. Transferência
-        from.setValor(from.getValor().subtract(dto.getAmount()));
-        to.setValor(to.getValor().add(dto.getAmount()));
+        from.setValor(from.getValor().subtract(dto.amount()));
+        to.setValor(to.getValor().add(dto.amount()));
 
         // 6. Persist com optimistic locking:
         //    UPDATE tb_beneficio SET vl_valor=?, version=? WHERE id=? AND version=?
         //    Se version não bater → OptimisticLockingFailureException → 409
-        beneficioRepository.save(from);
-        beneficioRepository.save(to);
+        beneficioRepository.saveAll(Arrays.asList(from, to));
 
         // 7. Registrar recibo imutável (criado_em atribuído pelo banco via DEFAULT NOW())
         Transacao recibo = Transacao.builder()
                 .fromId(from.getId())
                 .toId(to.getId())
-                .amount(dto.getAmount())
+                .amount(dto.amount())
                 .fromNome(from.getNome())
                 .toNome(to.getNome())
                 .fromValorAnterior(fromAnterior)
