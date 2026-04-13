@@ -203,3 +203,22 @@ Verifique se o backend está configurado para aceitar requisições de `http://l
 | `npm run watch` | Build em modo watch (desenvolvimento) |
 | `npm test` | Executa os testes unitários com Vitest |
 | `npm run test:watch` | Testes em modo watch |
+| `npm run doc` | Gera documentação da API com Compodoc |
+
+---
+
+## 📚 Documentação da API
+
+Gerar documentação HTML a partir dos comentários JSDoc no código:
+
+```bash
+npm run doc
+```
+
+Abrir no navegador após gerar:
+
+```bash
+npm run doc -- --serve
+```
+
+A documentação será gerada em `documentation/` e estará disponível em **http://localhost:6060**.
