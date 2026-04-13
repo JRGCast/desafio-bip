@@ -1,64 +1,65 @@
 <div class="slider-container">
-  <h2>Proporção de Benefícios</h2>
-  
+  <h2 class="slider-title">Proporção de Benefícios</h2>
+
   @if (!componentReady()) {
     <div class="loading-message">Carregando benefícios...</div>
   } @else {
     <div class="beneficios-display">
       <div class="beneficio beneficio-a">
         <span class="label">{{ beneficioA()?.nome || 'Benefício A' }}</span>
-        <span class="value">{{ valorA() | number:'1.0-0' }}</span>
+        <span class="value">{{ valorA() | currency:'BRL':'symbol':'1.2-2' }}</span>
       </div>
-      
+
       <div class="beneficio beneficio-b">
         <span class="label">{{ beneficioB()?.nome || 'Benefício B' }}</span>
-        <span class="value">{{ valorB() | number:'1.0-0' }}</span>
+        <span class="value">{{ valorB() | currency:'BRL':'symbol':'1.2-2' }}</span>
       </div>
     </div>
 
     <div class="slider-wrapper">
-      <input 
-        type="range" 
-        min="0" 
-        max="100" 
+      <input
+        id="beneficio-slider"
+        type="range"
+        min="0"
+        max="100"
         step="1"
         [ngModel]="sliderPercentage()"
         (ngModelChange)="onSliderChange($event)"
         class="slider"
+        [attr.aria-label]="'Proporção do ' + (beneficioA()?.nome || 'Benefício A')"
+        [attr.aria-valuetext]="sliderPercentage() + '% para ' + (beneficioA()?.nome || 'Benefício A') + ', ' + (100 - sliderPercentage()) + '% para ' + (beneficioB()?.nome || 'Benefício B')"
       />
-      <div class="slider-labels">
+      <div class="slider-labels" aria-hidden="true">
         <span>0%</span>
         <span>100%</span>
       </div>
     </div>
 
-    <div class="percentage-display">
-      <span>Benefício A: {{ sliderPercentage() }}%</span>
-      <span>Benefício B: {{ 100 - sliderPercentage() }}%</span>
+    <div class="percentage-display" aria-live="polite">
+      <span>{{ beneficioA()?.nome || 'Benefício A' }}: {{ sliderPercentage() }}%</span>
+      <span>{{ beneficioB()?.nome || 'Benefício B' }}: {{ 100 - sliderPercentage() }}%</span>
     </div>
 
-    <button 
-      class="alterar-btn" 
-      (click)="alterar()" 
-      [disabled]="loading()">
+    <button
+      class="alterar-btn"
+      (click)="alterar()"
+      [disabled]="loading()"
+      [attr.aria-busy]="loading()"
+      aria-label="Confirmar alteração na proporção dos benefícios">
       @if (loading()) {
-        <span class="loading">Processando...</span>
+        <span class="loading" aria-hidden="true">Processando...</span>
       } @else {
         Alterar proporção de benefícios
       }
     </button>
 
     @if (successMessage()) {
-      <div class="success">{{ successMessage() }}</div>
+      <div class="success" role="status" aria-live="polite">{{ successMessage() }}</div>
     }
 
     @if (error()) {
-      <div class="error">{{ error() }}</div>
-    }
-
-    @if (refreshFailed()) {
-      <div class="error">
-        Erro ao atualizar dados. 
+      <div class="error" role="alert">
+        {{ error() }}
         <button class="retry-btn" (click)="refreshData()">Tentar novamente</button>
       </div>
     }
