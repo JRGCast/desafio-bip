@@ -1,0 +1,36 @@
+<div class="extrato-container">
+  <h2>Extrato</h2>
+
+  @if (transacoes().length === 0) {
+  <div class="empty">Nenhuma transação encontrada.</div>
+  } @else {
+  <div class="table-wrapper">
+    <table class="transacoes-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>De</th>
+          <th>Para</th>
+          <th>Valor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of transacoes(); track t.id) {
+        <tr>
+          <td>{{ t.criadoEm | date:'dd/MM/yyyy HH:mm' }}</td>
+          <td>{{ t.fromNome }}</td>
+          <td>{{ t.toNome }}</td>
+          <td class="amount">{{ t.amount | number:'1.2-2' }}</td>
+          <td>
+            <span class="status" [class.success]="t.status === 'SUCESSO'">
+              {{ t.status }}
+            </span>
+          </td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  }
+</div>

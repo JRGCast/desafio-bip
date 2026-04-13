@@ -1,0 +1,66 @@
+<div class="slider-container">
+  <h2>Proporção de Benefícios</h2>
+  
+  @if (!componentReady()) {
+    <div class="loading-message">Carregando benefícios...</div>
+  } @else {
+    <div class="beneficios-display">
+      <div class="beneficio beneficio-a">
+        <span class="label">{{ beneficioA()?.nome || 'Benefício A' }}</span>
+        <span class="value">{{ valorA() | number:'1.0-0' }}</span>
+      </div>
+      
+      <div class="beneficio beneficio-b">
+        <span class="label">{{ beneficioB()?.nome || 'Benefício B' }}</span>
+        <span class="value">{{ valorB() | number:'1.0-0' }}</span>
+      </div>
+    </div>
+
+    <div class="slider-wrapper">
+      <input 
+        type="range" 
+        min="0" 
+        max="100" 
+        step="1"
+        [ngModel]="sliderPercentage()"
+        (ngModelChange)="onSliderChange($event)"
+        class="slider"
+      />
+      <div class="slider-labels">
+        <span>0%</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <div class="percentage-display">
+      <span>Benefício A: {{ sliderPercentage() }}%</span>
+      <span>Benefício B: {{ 100 - sliderPercentage() }}%</span>
+    </div>
+
+    <button 
+      class="alterar-btn" 
+      (click)="alterar()" 
+      [disabled]="loading()">
+      @if (loading()) {
+        <span class="loading">Processando...</span>
+      } @else {
+        Alterar proporção de benefícios
+      }
+    </button>
+
+    @if (successMessage()) {
+      <div class="success">{{ successMessage() }}</div>
+    }
+
+    @if (error()) {
+      <div class="error">{{ error() }}</div>
+    }
+
+    @if (refreshFailed()) {
+      <div class="error">
+        Erro ao atualizar dados. 
+        <button class="retry-btn" (click)="refreshData()">Tentar novamente</button>
+      </div>
+    }
+  }
+</div>
