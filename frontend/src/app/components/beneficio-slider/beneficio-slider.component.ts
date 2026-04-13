@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { switchMap, forkJoin, catchError, retry, EMPTY } from 'rxjs';
-import { ApiService, Beneficio } from '../../services/api.service';
+import { ApiService, IBeneficio, ITransferenciaRequest } from '../../services/api.service';
 import { BeneficioStateService } from '../../services/beneficio-state.service';
 
 @Component({
@@ -19,8 +19,8 @@ export class BeneficioSliderComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
 
   // Simple signals - managed via subscription
-  beneficioA = signal<Beneficio | null>(null);
-  beneficioB = signal<Beneficio | null>(null);
+  beneficioA = signal<IBeneficio | null>(null);
+  beneficioB = signal<IBeneficio | null>(null);
 
   // Total computed from local signals
   total = computed(() => 
@@ -67,43 +67,38 @@ export class BeneficioSliderComponent implements OnInit {
     }
   }
 
-  onSliderChange(updatedValue: number): void {
-    this.sliderPercentage.set(updatedValue);
-  }
-
-  alterar(): void {
+  private buildTransferenciaRequest(): ITransferenciaRequest | null {
     const a = this.beneficioA();
     const b = this.beneficioB();
-    if (!a || !b) return;
+    if (!a || !b) return null;
 
     const currentA = Number(a.valor);
     const newA = this.valorA();
     const diff = Math.abs(newA - currentA);
 
-    if (diff === 0) {
-      return;
-    }
-
-    let fromId: number;
-    let toId: number;
-    let amount: number;
+    if (diff === 0) return null;
 
     if (newA < currentA) {
-      fromId = a.id;
-      toId = b.id;
-      amount = currentA - newA;
+      return { fromId: a.id, toId: b.id, amount: currentA - newA };
     } else {
-      fromId = b.id;
-      toId = a.id;
-      amount = newA - currentA;
+      return { fromId: b.id, toId: a.id, amount: newA - currentA };
     }
+  }
+
+  onSliderChange(updatedValue: number): void {
+    this.sliderPercentage.set(updatedValue);
+  }
+
+  alterar(): void {
+    const request = this.buildTransferenciaRequest();
+    if (!request) return;
 
     this.refreshFailed.set(false);
     this.loading.set(true);
     this.error.set('');
     this.successMessage.set('');
 
-    this.apiService.transferir({ fromId, toId, amount }).pipe(
+    this.apiService.transferir(request).pipe(
       switchMap(() => forkJoin({
         beneficios: this.apiService.getBeneficios().pipe(
           retry({ count: 3, delay: 1000 })

@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-export interface Beneficio {
+export interface IBeneficio {
   id: number;
   nome: string;
   descricao: string | null;
@@ -11,7 +11,7 @@ export interface Beneficio {
   version: number;
 }
 
-export interface Transacao {
+export interface ITransacao {
   id: number;
   fromId: number;
   toId: number;
@@ -24,7 +24,7 @@ export interface Transacao {
   status: string;
 }
 
-export interface TransferenciaRequest {
+export interface ITransferenciaRequest {
   fromId: number;
   toId: number;
   amount: number;
@@ -37,15 +37,15 @@ export class ApiService {
   private http = inject(HttpClient);
   private baseUrl = 'http://localhost:8080/api/v1';
 
-  getBeneficios(): Observable<Beneficio[]> {
-    return this.http.get<Beneficio[]>(`${this.baseUrl}/beneficios`);
+  getBeneficios(): Observable<IBeneficio[]> {
+    return this.http.get<IBeneficio[]>(`${this.baseUrl}/beneficios`);
   }
 
-  getTransacoes(): Observable<Transacao[]> {
-    return this.http.get<Transacao[]>(`${this.baseUrl}/transacoes`);
+  getTransacoes(): Observable<ITransacao[]> {
+    return this.http.get<ITransacao[]>(`${this.baseUrl}/transacoes`);
   }
 
-  transferir(request: TransferenciaRequest): Observable<Transacao> {
-    return this.http.post<Transacao>(`${this.baseUrl}/beneficios/transferencia`, request);
+  transferir(request: ITransferenciaRequest): Observable<ITransacao> {
+    return this.http.post<ITransacao>(`${this.baseUrl}/beneficios/transferencia`, request);
   }
 }
